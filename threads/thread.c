@@ -196,6 +196,11 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
+	/* Initialize fd_table */
+	for (int i = 3; i < FD_MAX; i++)
+		t->fd_table[i] = NULL;
+	t->fd_max = 3;
+
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
 	t->tf.rip = (uintptr_t) kernel_thread;
@@ -206,6 +211,15 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+
+	/* For process hierarchy */
+	t->exit_status = 0;
+	t->is_exit = 0;
+	sema_init(&t->sema_load, 0);
+	sema_init(&t->sema_wait, 0);
+	sema_init(&t->sema_exit, 0);
+	// 부모의 자식 리스트에 방금 생성한 자식 추가 
+	list_push_back(&thread_current()->child_list, &t->child_elem);
 
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -245,7 +259,6 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	// list_push_back (&ready_list, &t->elem);
 	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
@@ -288,6 +301,11 @@ thread_exit (void) {
 	ASSERT (!intr_context ());
 
 #ifdef USERPROG
+	sema_up(&thread_current()->sema_wait);
+	sema_down(&thread_current()->sema_exit);
+	// 자식 프로세스 디스크립터 삭제
+	list_remove(&thread_current()->child_elem);
+	thread_current()->is_exit = 1;
 	process_exit ();
 #endif
 
@@ -310,7 +328,6 @@ thread_yield (void) {
 	old_level = intr_disable ();
 	if (curr != idle_thread)
 		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
-		// list_push_back (&ready_list, &curr->elem);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -338,7 +355,7 @@ void thread_awake (int64_t ticks) {
 	while(cur_elem != list_end(&sleep_list)) {
 		struct thread *find_thread = list_entry (cur_elem, struct thread, elem);
 		if (find_thread->wake_up_tick <= ticks) {
-			cur_elem = list_remove(cur_elem);     // sleep list에서 빼기
+			cur_elem = list_remove(cur_elem); // sleep list에서 빼기
 			thread_unblock(find_thread);
 		}
 		else 
@@ -412,7 +429,6 @@ bool cmp_donations (const struct list_elem  *cmp_elem, const struct list_elem  *
 }
 
 void donate_priority(void) {
-	// struct thread *curr = running_thread();
 	struct thread *curr = thread_current();	
 	struct thread *next = curr->wait_on_lock->holder;
 	int cnt = 0;
@@ -435,7 +451,6 @@ void donate_priority(void) {
 
 /* 락 놔줄 때 락 기다리고 있던 donations 지우기 */
 void remove_with_lock(struct lock *lock) {
-	// struct thread *curr = running_thread();
 	struct thread *curr = thread_current();	
 	struct list_elem *donation = list_begin(&curr->donations);
 
@@ -447,7 +462,6 @@ void remove_with_lock(struct lock *lock) {
 }
 
 void refresh_priority(void) {
-	// struct thread *curr = running_thread();
 	struct thread *curr = thread_current();	
 	curr->priority = curr->init_priority;
 
@@ -552,6 +566,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->init_priority = priority;
 	t->wait_on_lock = NULL;
 	list_init(&t->donations);
+	list_init(&t->child_list);
 	t->magic = THREAD_MAGIC;
 }
 

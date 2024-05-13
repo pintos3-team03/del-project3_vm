@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -27,6 +28,9 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+/* Max file descriptor size */
+#define FD_MAX 128
 
 /* A kernel thread or user process.
  *
@@ -106,6 +110,20 @@ struct thread {
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+	struct file *fd_table[FD_MAX];
+	int fd_max;
+	struct file *run_file;
+
+	/* For process hierarchy */
+	struct intr_frame parent_if;
+	struct list_elem child_elem;
+	struct list child_list;
+
+	struct semaphore sema_load;
+	struct semaphore sema_wait;
+	struct semaphore sema_exit;
+	int exit_status;
+	int is_exit;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
