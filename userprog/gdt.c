@@ -38,16 +38,16 @@ struct segment_desc {
 };
 
 struct segment_descriptor64 {
-	unsigned lim_15_0 : 16;
-	unsigned base_15_0 : 16;
-	unsigned base_23_16 : 8;
-	unsigned type : 4;
-	unsigned s : 1;
-	unsigned dpl : 2;
-	unsigned p : 1;
-	unsigned lim_19_16 : 4;
-	unsigned avl : 1;
-	unsigned rsv1 : 2;
+	unsigned lim_15_0 : 16;  // 세그먼트 크기
+	unsigned base_15_0 : 16; // 세그먼트 기준 주소
+	unsigned base_23_16 : 8; // 세그먼트 기준 주소
+	unsigned type : 4;		 // 세그먼트 타입(코드, 데이터, 시스템 등)
+	unsigned s : 1; 		 // 세그먼트가 시스템 세그먼트인지 사용자 세그먼트인지 표시
+	unsigned dpl : 2;		 // 세그먼트 접근 권한 레벨
+	unsigned p : 1;			 // 세그먼트가 메모리에 존재하는지 여부
+	unsigned lim_19_16 : 4;  // 세그먼트 크기
+	unsigned avl : 1;		 // 운영체제에서 사용할 수 있는 1비트 필드
+	unsigned rsv1 : 2;		 // 
 	unsigned g : 1;
 	unsigned base_31_24 : 8;
 	uint32_t base_63_32;
@@ -84,7 +84,7 @@ gdt_init (void) {
 	/* Initialize GDT. */
 	struct segment_descriptor64 *tss_desc =
 		(struct segment_descriptor64 *) &gdt[SEL_TSS >> 3];
-	struct task_state *tss = tss_get ();
+	struct task_state *tss = tss_get (); // 커널 tss
 
 	*tss_desc = (struct segment_descriptor64) {
 		.lim_15_0 = (uint64_t) (sizeof (struct task_state)) & 0xffff,
