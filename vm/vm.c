@@ -3,6 +3,10 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "threads/mmu.h"
+
+static unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
+static bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -83,7 +87,7 @@ bool
 spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
-	
+
 	if (hash_insert(&spt->spt_table, &page->hash_elem))
 		succ = true;
 
@@ -119,18 +123,22 @@ vm_evict_frame (void) {
  * and return it. This always return valid address. That is, if the user pool
  * memory is full, this function evicts the frame to get the available memory
  * space.*/
-/* palloc()과 프레임을 가져온다. 항상 유죠한 주소를 반환한다. 
+/* palloc()과 프레임을 가져온다. 항상 유효한 주소를 반환한다. 
  * 사용자 풀 메모리가 가득 찬 경우 사용 가능한 메모리 공간을 얻기 위해 프레임을 제거한다.
  * palloc_get_page 함수를 호출하여 메모리 풀에서 새로운 물리메모리 페이지를 가져온다. 
  * 성공적으로 가져오면 프레임을 할당하고 프레임 구조체의 멤버들을 초기화한 후 해당 프레임을 반환한다.
  * 페이지 할당 실패했을 때 아직은 swap out할 필요 없다. PANIC("todo")로 표시만 해두자.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
+	struct frame *frame = palloc_get_page(PAL_USER);
 	/* TODO: Fill this function. */
+	if (!frame) {
+		PANIC("TODO: swap out");
+	}
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
+
 	return frame;
 }
 
@@ -168,7 +176,10 @@ vm_dealloc_page (struct page *page) {
 bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
+	struct thread *curr = thread_current();
 	/* TODO: Fill this function */
+	if (page = spt_find_page(&curr->spt, va) == NULL)
+		return false;
 
 	return vm_do_claim_page (page);
 }
@@ -177,12 +188,16 @@ vm_claim_page (void *va UNUSED) {
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
+	struct thread *curr = thread_current();
 
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	uint64_t *pte = pml4e_walk(curr->pml4, (uint64_t) &page->va, 0);
+	pml4_set_page(curr->pml4, page->va, frame->kva, is_writable(pte)); // (va - pa) mapping
+	spt_insert_page(&curr->spt, page);
 
 	return swap_in (page, frame->kva);
 }
