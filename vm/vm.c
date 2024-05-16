@@ -108,6 +108,11 @@ vm_evict_frame (void) {
  * and return it. This always return valid address. That is, if the user pool
  * memory is full, this function evicts the frame to get the available memory
  * space.*/
+/* palloc()과 프레임을 가져온다. 항상 유죠한 주소를 반환한다. 
+ * 사용자 풀 메모리가 가득 찬 경우 사용 가능한 메모리 공간을 얻기 위해 프레임을 제거한다.
+ * palloc_get_page 함수를 호출하여 메모리 풀에서 새로운 물리메모리 페이지를 가져온다. 
+ * 성공적으로 가져오면 프레임을 할당하고 프레임 구조체의 멤버들을 초기화한 후 해당 프레임을 반환한다.
+ * 페이지 할당 실패했을 때 아직은 swap out할 필요 없다. PANIC("todo")로 표시만 해두자.*/
 static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
